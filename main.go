@@ -180,7 +180,7 @@ func validateArticleFormData(title string, body string) map[string]string {
 	return errors
 }
 
-func saveArticleToDB(title string, body string) (int64, error) {
+func SaveArticleToDB(title string, body string) (int64, error) {
 
 	// 变量初始化
 	var (
