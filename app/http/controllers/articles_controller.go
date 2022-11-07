@@ -3,12 +3,11 @@ package controllers
 import (
 	"fmt"
 	"goblog_2/app/models/article"
+	"goblog_2/app/requests"
 	"goblog_2/pkg/logger"
 	"goblog_2/pkg/route"
 	"goblog_2/pkg/view"
 	"net/http"
-	"strconv"
-	"unicode/utf8"
 
 	"gorm.io/gorm"
 )
@@ -77,50 +76,33 @@ func (*ArticlesController) Create(w http.ResponseWriter, r *http.Request) {
 	view.Render(w, view.D{}, "articles.create", "articles._form_field")
 }
 
-func validateArticleFormData(title string, body string) map[string]string {
-	errors := make(map[string]string)
-	// 验证标题
-	if title == "" {
-		errors["title"] = "标题不能为空"
-	} else if utf8.RuneCountInString(title) < 3 || utf8.RuneCountInString(title) > 40 {
-		errors["title"] = "标题长度需介于 3~40"
-	}
-
-	// 验证内容
-	if body == "" {
-		errors["body"] = "内容不能为空"
-	} else if utf8.RuneCountInString(body) < 10 {
-		errors["body"] = "内容长度需大于或等于 10 个字节"
-	}
-
-	return errors
-}
-
 // Store 文章创建页面
 func (*ArticlesController) Store(w http.ResponseWriter, r *http.Request) {
-	title := r.PostFormValue("title")
-	body := r.PostFormValue("body")
 
+	// 1、初始化数据
 	_article := article.Article{
-		Title: title,
-		Body:  body,
+		Title: r.PostFormValue("title"),
+		Body:  r.PostFormValue("body"),
 	}
 
-	errors := validateArticleFormData(title, body)
+	// 2、表单验证
+	errors := requests.ValidateArticleForm(_article)
 
-	// 检查是否有错误
+	// 3、检测错误
 	if len(errors) == 0 {
+		// 创建文章
 		_article.Create()
 		if _article.ID > 0 {
-			fmt.Fprint(w, "插入成功, ID 为"+strconv.FormatUint(_article.ID, 10))
+			indexURL := route.Name2URL("articles.show", "id", _article.GetStringID())
+			http.Redirect(w, r, indexURL, http.StatusFound)
 		} else {
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprint(w, "500 服务器内部错误")
+			fmt.Fprint(w, "创建文章失败, 请联系管理员")
 		}
 	} else {
 		view.Render(w, view.D{
 			"Article": _article,
-			"Errors":  view.D{},
+			"Errors":  errors,
 		}, "articles.create", "articles._form_field")
 	}
 }
@@ -180,17 +162,14 @@ func (*ArticlesController) Update(w http.ResponseWriter, r *http.Request) {
 		// 4. 未出现错误
 
 		// 4.1 表单验证
-		title := r.PostFormValue("title")
-		body := r.PostFormValue("body")
+		_article.Title = r.PostFormValue("title")
+		_article.Body = r.PostFormValue("body")
 
-		errors := validateArticleFormData(title, body)
+		errors := requests.ValidateArticleForm(_article)
 
 		if len(errors) == 0 {
 
 			// 4.2 表单验证通过，更新数据
-			_article.Title = title
-			_article.Body = body
-
 			rowsAffected, err := _article.Update()
 
 			if err != nil {
